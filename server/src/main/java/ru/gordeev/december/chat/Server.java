@@ -21,8 +21,7 @@ public class Server {
             System.out.printf("Server has been started at port %d\n", port);
             while (true) {
                 Socket clientSocket = socket.accept();
-                ClientHandler newClient = new ClientHandler(this, clientSocket);
-                subscribe(newClient);
+                subscribe(new ClientHandler(this, clientSocket));
             }
         } catch (IOException e) {
             System.out.println("Failed to connect user");
