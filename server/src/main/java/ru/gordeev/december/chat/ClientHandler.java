@@ -22,13 +22,18 @@ public class ClientHandler {
         username = "User_#" + clientsCount;
 
         Thread t = new Thread(() -> {
-            System.out.println("Client connected");
             try {
                 while (true) {
                     String message = in.readUTF();
                     if (message.startsWith("/")) {
                         if (message.equals("/exit")) {
                             break;
+                        }
+
+                        if (message.contains("/w")) {
+                            String[] splitMessage = message.split(" ", 3);
+                            server.sendPrivateMessage(this, splitMessage[1], splitMessage[2]);
+                            continue;
                         }
                     }
                     server.broadcastMessage(username + ": " + message);
