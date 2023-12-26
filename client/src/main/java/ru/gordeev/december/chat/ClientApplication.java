@@ -8,6 +8,8 @@ import java.util.Scanner;
 
 public class ClientApplication {
 
+    private static String username;
+
     public static void main(String[] args) {
         try (
                 Socket socket = new Socket("localhost", 8089);
@@ -16,22 +18,30 @@ public class ClientApplication {
         ) {
             System.out.println("Successful connection to server");
             Scanner scanner = new Scanner(System.in);
-            Thread t = new Thread(() -> {
+            new Thread(() -> {
                 try {
+                    while (true) {
+                        String message = in.readUTF();
+                        if (message.startsWith("/")) {
+                            if (message.startsWith("/authok ")) {
+                                username = message.split(" ")[1];
+                                break;
+                            }
+                        }
+                        System.out.println(message);
+                    }
                     while (true) {
                         String message = in.readUTF();
                         System.out.println(message);
                     }
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    System.out.println("You have been disconnected from the server");
                 }
-            });
-            t.start();
+            }).start();
             while (true) {
                 String message = scanner.nextLine();
                 out.writeUTF(message);
                 if (message.equals("/exit")) {
-                    t.stop();
                     break;
                 }
             }
