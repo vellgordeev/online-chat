@@ -14,9 +14,9 @@ public class ClientApplication {
                 DataInputStream in = new DataInputStream(socket.getInputStream());
                 DataOutputStream out = new DataOutputStream(socket.getOutputStream())
         ) {
-            System.out.println("Подключились к серверу");
+            System.out.println("Successful connection to server");
             Scanner scanner = new Scanner(System.in);
-            new Thread(() -> {
+            Thread t = new Thread(() -> {
                 try {
                     while (true) {
                         String message = in.readUTF();
@@ -25,11 +25,13 @@ public class ClientApplication {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-            }).start();
+            });
+            t.start();
             while (true) {
                 String message = scanner.nextLine();
                 out.writeUTF(message);
                 if (message.equals("/exit")) {
+                    t.stop();
                     break;
                 }
             }

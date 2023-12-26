@@ -24,7 +24,7 @@ public class Server {
                 subscribe(new ClientHandler(this, clientSocket));
             }
         } catch (IOException e) {
-            System.out.println("Не удалось подключить клиента");
+            System.out.println("Failed to connect user");
         }
     }
 
@@ -32,6 +32,13 @@ public class Server {
         for (ClientHandler client : clientHandlerList) {
             client.sendMessage(message);
         }
+    }
+
+    public synchronized void sendPrivateMessage(ClientHandler clientHandler, String receiverUsername, String message) {
+        for (ClientHandler ch : clientHandlerList)
+            if (ch.getUsername().equals(receiverUsername)) {
+                ch.sendMessage("private message from " + clientHandler.getUsername() + ": " + message);
+            }
     }
 
     public synchronized void subscribe(ClientHandler clientHandler) {
