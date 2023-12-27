@@ -4,15 +4,16 @@ import java.util.*;
 
 public class InMemoryUserService implements UserService {
 
-    record User(String login, String password, String username) { }
+    record User(String login, String password, String username, UserRole userRole) { }
 
     private List<User> users;
 
     public InMemoryUserService() {
         this.users = new ArrayList<>(Arrays.asList(
-                new User("login1", "pass1", "John"),
-                new User("login2", "pass2", "Vell"),
-                new User("login3", "pass3", "Max")
+                new User("admin", "admin", "Administrator", UserRole.ADMIN),
+                new User("login1", "pass1", "John", UserRole.USER),
+                new User("login2", "pass2", "Vell", UserRole.USER),
+                new User("login3", "pass3", "Max", UserRole.USER)
         ));
     }
 
@@ -29,10 +30,20 @@ public class InMemoryUserService implements UserService {
     @Override
     public boolean registerUser(String login, String password, String username) {
         if (!isUserAlreadyRegistered(login, username)) {
-            users.add(new User(login, password, username));
+            users.add(new User(login, password, username, UserRole.USER));
             return true;
         }
         return false;
+    }
+
+    @Override
+    public UserRole getUserRole(String username) {
+        for (User user : users) {
+            if (user.username.equals(username)) {
+                return user.userRole;
+            }
+        }
+        return null;
     }
 
     @Override

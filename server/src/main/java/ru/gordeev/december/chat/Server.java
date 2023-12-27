@@ -61,6 +61,17 @@ public class Server {
             }
     }
 
+    public synchronized boolean kickUser(String username) {
+        for (ClientHandler client : clientHandlerList) {
+            if (client.getUsername().equals(username)) {
+                client.sendMessage("/kicked");
+                unsubscribe(client);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public synchronized boolean isUserBusy(String username) {
         for (ClientHandler client : clientHandlerList) {
             if (client.getUsername().equals(username)) {
