@@ -17,6 +17,9 @@ public class ClientHandler {
         return username;
     }
 
+    public UserRole getUserRole() {
+        return userRole;
+    }
 
     public ClientHandler(Server server, Socket socket) throws IOException {
         this.server = server;
