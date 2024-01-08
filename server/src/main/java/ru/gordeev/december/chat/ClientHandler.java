@@ -11,11 +11,15 @@ public class ClientHandler {
     private DataInputStream in;
     private DataOutputStream out;
     private String username;
+    private UserRole userRole;
 
     public String getUsername() {
         return username;
     }
 
+    public UserRole getUserRole() {
+        return userRole;
+    }
 
     public ClientHandler(Server server, Socket socket) throws IOException {
         this.server = server;
@@ -51,6 +55,27 @@ public class ClientHandler {
                     }
                     server.sendPrivateMessage(this, splitMessage[1], splitMessage[2]);
                     continue;
+                }
+                if (message.startsWith("/kick")) {
+                    String[] splitMessage = message.split(" ", 2);
+                    String userToBeKicked = splitMessage[1];
+                    if (splitMessage.length != 2 || username.equals(userToBeKicked)) {
+                        sendMessage("Server: incorrect kick command");
+                        continue;
+                    }
+
+                    if (userRole == UserRole.ADMIN) {
+                        if (server.kickUser(userToBeKicked)) {
+                            server.broadcastMessage(String.format("%s kicked %s", username, userToBeKicked));
+                            continue;
+                        } else {
+                            sendMessage("Server: couldn't find such user");
+                            continue;
+                        }
+                    } else {
+                        sendMessage("Server: you doesn't have rights for this command");
+                        continue;
+                    }
                 }
             }
             server.broadcastMessage(username + ": " + message);
@@ -94,6 +119,7 @@ public class ClientHandler {
             return false;
         }
         username = usernameFromService;
+        userRole = server.getUserService().getUserRole(username);
         sendMessage("/authok " + username);
         sendMessage(String.format("Server: welcome to the chat, %s!", username));
         server.subscribe(this);

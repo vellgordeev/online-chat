@@ -8,4 +8,6 @@ public interface UserService {
 
     boolean registerUser(String login, String password, String username);
 
+    UserRole getUserRole(String username);
+
 }
