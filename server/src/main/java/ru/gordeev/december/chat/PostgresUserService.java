@@ -49,7 +49,7 @@ public class PostgresUserService implements UserService {
             e.printStackTrace();
         } finally {
             try {
-                if (connection != null && !connection.isClosed()) {
+                if (!connection.isClosed()) {
                     connection.close();
                 }
             } catch (SQLException e) {
@@ -102,7 +102,7 @@ public class PostgresUserService implements UserService {
             e.printStackTrace();
         } finally {
             try {
-                if (connection != null && !connection.isClosed()) {
+                if (!connection.isClosed()) {
                     connection.close();
                 }
             } catch (SQLException e) {
@@ -134,7 +134,7 @@ public class PostgresUserService implements UserService {
             e.printStackTrace();
         } finally {
             try {
-                if (connection != null && !connection.isClosed()) {
+                if (!connection.isClosed()) {
                     connection.close();
                 }
             } catch (SQLException e) {
