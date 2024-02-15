@@ -19,12 +19,12 @@ public class Server {
     public Server(int port) {
         this.port = port;
         this.clientHandlerList = new ArrayList<>();
-        this.userService = new InMemoryUserService();
+        this.userService = new PostgresUserService();
     }
 
     public void start() {
         try (ServerSocket socket = new ServerSocket(port)) {
-            System.out.printf("Server has been started at port %d\n", port);
+            System.out.printf("Server has been started at port %d%n", port);
             while (true) {
                 Socket clientSocket = socket.accept();
                 try {

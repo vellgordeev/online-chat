@@ -1,6 +1,8 @@
 package ru.gordeev.december.chat;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class InMemoryUserService implements UserService {
 
@@ -18,7 +20,7 @@ public class InMemoryUserService implements UserService {
     }
 
     @Override
-    public String getUserByLoginAndPassword(String login, String password) {
+    public String getUsernameByLoginAndPassword(String login, String password) {
         for (User user : users) {
             if (user.login.equals(login) && user.password.equals(password)) {
                 return user.username;

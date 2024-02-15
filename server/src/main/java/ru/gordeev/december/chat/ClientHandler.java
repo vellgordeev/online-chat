@@ -109,7 +109,7 @@ public class ClientHandler {
         }
         String login = elements[1];
         String password = elements[2];
-        String usernameFromService = server.getUserService().getUserByLoginAndPassword(login, password);
+        String usernameFromService = server.getUserService().getUsernameByLoginAndPassword(login, password);
         if (usernameFromService == null) {
             sendMessage("Server: user doesn't exist with such login and password");
             return false;
