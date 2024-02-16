@@ -8,15 +8,19 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Client {
 
     private final Logger logger;
+    private final ExecutorService threadPool;
     private String username;
     private boolean isOnline;
 
     public Client() {
         this.logger = LogManager.getLogger(Client.class);
+        this.threadPool = Executors.newCachedThreadPool();
     }
 
     public void start() {
@@ -28,14 +32,14 @@ public class Client {
             logger.info("Successful connection to server");
             isOnline = true;
             Scanner scanner = new Scanner(System.in);
-            new Thread(() -> {
+            threadPool.execute(() -> {
                 try {
                     readMessagesFromServerAndPrintThem(in);
                     listenToBreakCommandsAndDoThem(in);
                 } catch (IOException e) {
                     logger.warn("You have been disconnected from the server");
                 }
-            }).start();
+            });
             listenToUserInputAndSendItToServer(scanner, out);
         } catch (IOException e) {
             logger.warn("You have been disconnected from the server");

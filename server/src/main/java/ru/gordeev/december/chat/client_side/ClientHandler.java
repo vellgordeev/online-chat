@@ -8,10 +8,13 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ClientHandler {
 
     private Logger logger;
+    private final ExecutorService threadPool;
     private Server server;
     private Socket socket;
     private DataInputStream in;
@@ -29,12 +32,13 @@ public class ClientHandler {
 
     public ClientHandler(Server server, Socket socket) throws IOException {
         this.logger = LogManager.getLogger(ClientHandler.class);
+        this.threadPool = Executors.newCachedThreadPool();
         this.server = server;
         this.socket = socket;
         this.in = new DataInputStream(socket.getInputStream());
         this.out = new DataOutputStream(socket.getOutputStream());
 
-        new Thread(() -> {
+        threadPool.execute(() -> {
             try {
                 sendMessage("Server: please login (/auth {login} {password}) or register (/register {login} {password} {nickname})");
                 authentication();
@@ -44,7 +48,7 @@ public class ClientHandler {
             } finally {
                 disconnect();
             }
-        }).start();
+        });
     }
 
     private void processClientsChatMessages() throws IOException {

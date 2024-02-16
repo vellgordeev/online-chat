@@ -7,10 +7,13 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Network implements AutoCloseable {
 
     private Logger logger;
+    private final ExecutorService threadPool;
     private Socket socket;
     private DataOutputStream out;
     private DataInputStream in;
@@ -18,6 +21,7 @@ public class Network implements AutoCloseable {
 
     public Network() {
         this.logger = LogManager.getLogger(Network.class);
+        this.threadPool = Executors.newCachedThreadPool();
     }
 
     public void setOnMessageReceived(Callback onMessageReceived) {
@@ -30,7 +34,7 @@ public class Network implements AutoCloseable {
         this.in = new DataInputStream(socket.getInputStream());
 
         try {
-            new Thread(() -> {
+            threadPool.execute(() -> {
                 try {
                     while (true) {
                         String messageFromServer = in.readUTF();
@@ -39,7 +43,7 @@ public class Network implements AutoCloseable {
                 } catch (IOException e) {
                     logger.error(e);
                 }
-            }).start();
+            });
             while (true) {
                 String message = in.readUTF();
                 if (onMessageReceived != null) {
