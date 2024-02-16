@@ -8,6 +8,10 @@ public interface UserService {
 
     boolean registerUser(String login, String password, String username);
 
+    boolean changeUsername(String login, String newUsername);
+
     UserRole getUserRole(String username);
+
+    String getUserLogin(String username);
 
 }

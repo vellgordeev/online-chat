@@ -15,7 +15,6 @@ public class Client {
 
     private final Logger logger;
     private final ExecutorService threadPool;
-    private String username;
     private boolean isOnline;
 
     public Client() {
@@ -71,12 +70,6 @@ public class Client {
     private void readMessagesFromServerAndPrintThem(DataInputStream in) throws IOException {
         while (true) {
             String message = in.readUTF();
-            if (message.startsWith("/")) {
-                if (message.startsWith("/authok ")) {
-                    username = message.split(" ")[1];
-                    break;
-                }
-            }
             System.out.println(message);
         }
     }

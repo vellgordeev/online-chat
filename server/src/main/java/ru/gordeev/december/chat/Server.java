@@ -80,6 +80,33 @@ public class Server {
         return false;
     }
 
+    public synchronized void printActiveUsersList(String username) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("\nUsers are online now:\n");
+        for (ClientHandler client : clientHandlerList) {
+            sb.append(client.getUsername());
+            sb.append("\n");
+        }
+        for (ClientHandler client : clientHandlerList) {
+            if (client.getUsername().equals(username)) {
+                client.sendMessage(sb.toString());
+            }
+        }
+    }
+
+    public synchronized boolean changeUsername(String oldUsername, String newUsername) {
+        for (ClientHandler client : clientHandlerList) {
+            if (client.getUsername().equals(oldUsername)) {
+                client.setUsername(newUsername);
+                getUserService().changeUsername(client.getLogin(), newUsername);
+                client.sendMessage("Server: your nickname has been changed to " + newUsername);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public synchronized boolean isUserBusy(String username) {
         for (ClientHandler client : clientHandlerList) {
             if (client.getUsername().equals(username)) {

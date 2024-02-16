@@ -30,6 +30,8 @@ public class PostgresUserService implements UserService {
     private static final String INSERT_USER_BY_LOGIN_PASSWORD_USERNAME = "INSERT INTO users (login, password, username, role) " +
             "VALUES (?, crypt(?, gen_salt('bf')), ?, 'user')";
     private static final String SELECT_ROLE_BY_USERNAME = "SELECT role FROM users WHERE username = ?";
+    private static final String SELECT_LOGIN_BY_USERNAME = "SELECT login FROM users WHERE username = ?";
+    private static final String UPDATE_USERNAME = "UPDATE users SET username = ? WHERE login = ?";
 
     public PostgresUserService() {
         this.logger = LogManager.getLogger(PostgresUserService.class.getName());
@@ -45,7 +47,7 @@ public class PostgresUserService implements UserService {
     }
 
     @Override
-    public String getUsernameByLoginAndPassword(String login, String password) {
+    public synchronized String getUsernameByLoginAndPassword(String login, String password) {
         String username = null;
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(SELECT_USER_BY_LOGIN_AND_PASSWORD)) {
@@ -63,7 +65,7 @@ public class PostgresUserService implements UserService {
     }
 
     @Override
-    public boolean isUserAlreadyRegistered(String login, String username) {
+    public synchronized boolean isUserAlreadyRegistered(String login, String username) {
         Connection connection = getConnection();
         boolean isUserRegisted = false;
         try (PreparedStatement statement = connection.prepareStatement(SELECT_USER_BY_LOGIN_OR_USERNAME)) {
@@ -87,7 +89,7 @@ public class PostgresUserService implements UserService {
     }
 
     @Override
-    public boolean registerUser(String login, String password, String username) {
+    public synchronized boolean registerUser(String login, String password, String username) {
         Connection connection = getConnection();
         boolean isSuccess = false;
         try (PreparedStatement statement = connection.prepareStatement(INSERT_USER_BY_LOGIN_PASSWORD_USERNAME)) {
@@ -116,7 +118,31 @@ public class PostgresUserService implements UserService {
     }
 
     @Override
-    public UserRole getUserRole(String username) {
+    public synchronized boolean changeUsername(String login, String newUsername) {
+        Connection connection = getConnection();
+        boolean isSuccess = false;
+        try (PreparedStatement statement = connection.prepareStatement(UPDATE_USERNAME)) {
+            statement.setString(1, newUsername);
+            statement.setString(2, login);
+            if (statement.executeUpdate() != 0) {
+                isSuccess = true;
+            }
+        } catch (SQLException e) {
+            logger.error(e);
+        } finally {
+            try {
+                if (!connection.isClosed()) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                logger.error(e);
+            }
+        }
+        return isSuccess;
+    }
+
+    @Override
+    public synchronized UserRole getUserRole(String username) {
         Connection connection = getConnection();
         UserRole userRole = null;
         try (PreparedStatement statement = connection.prepareStatement(SELECT_ROLE_BY_USERNAME)) {
@@ -145,5 +171,30 @@ public class PostgresUserService implements UserService {
             }
         }
         return Objects.requireNonNull(userRole);
+    }
+
+    @Override
+    public synchronized String getUserLogin(String username) {
+        Connection connection = getConnection();
+        String login = null;
+        try (PreparedStatement statement = connection.prepareStatement(SELECT_LOGIN_BY_USERNAME)) {
+            statement.setString(1, username);
+            ResultSet resultSet = statement.executeQuery();
+
+            if (resultSet.next()) {
+                login = resultSet.getString(1);
+            }
+        } catch (SQLException e) {
+            logger.error(e);
+        } finally {
+            try {
+                if (!connection.isClosed()) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                logger.error(e);
+            }
+        }
+        return Objects.requireNonNull(login);
     }
 }

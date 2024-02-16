@@ -8,6 +8,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -19,6 +21,7 @@ public class ClientHandler {
     private Socket socket;
     private DataInputStream in;
     private DataOutputStream out;
+    private String login;
     private String username;
     private UserRole userRole;
 
@@ -26,8 +29,20 @@ public class ClientHandler {
         return username;
     }
 
+    public void setUsername(String newUserName) {
+        if (this.username.equals(newUserName)) {
+            logger.error(new RuntimeException("The old name cannot be equal to the new one!"));
+            return;
+        }
+        this.username = newUserName;
+    }
+
     public UserRole getUserRole() {
         return userRole;
+    }
+
+    public String getLogin() {
+        return login;
     }
 
     public ClientHandler(Server server, Socket socket) throws IOException {
@@ -58,12 +73,20 @@ public class ClientHandler {
                 if (message.equals("/exit")) {
                     break;
                 }
-                if (message.contains("/w")) {
+                if (message.startsWith("/w ")) {
                     sendPrivateMessage(message);
                     continue;
                 }
-                if (message.startsWith("/kick")) {
+                if (message.startsWith("/kick ")) {
                     executeKickCommand(message);
+                    continue;
+                }
+                if (message.startsWith("/changenick ")) {
+                    executeChangeUsernameCommand(message);
+                    continue;
+                }
+                if (message.startsWith("/activelist") && message.equals("/activelist")) {
+                    server.printActiveUsersList(username);
                     continue;
                 }
             }
@@ -72,10 +95,14 @@ public class ClientHandler {
     }
 
     private void executeKickCommand(String message) {
-        String[] splitMessage = message.split(" ", 2);
+        String[] splitMessage = message.trim().split(" ", 2);
+        if (splitMessage.length != 2 || splitMessage[1].isEmpty()) {
+            sendMessage("Server: Incorrect '/kick' command format");
+            return;
+        }
         String userToBeKicked = splitMessage[1];
-        if (splitMessage.length != 2 || username.equals(userToBeKicked)) {
-            sendMessage("Server: incorrect kick command");
+        if (username.equals(userToBeKicked)) {
+            sendMessage("Server: you cannot kick yourself");
             return;
         }
 
@@ -86,7 +113,27 @@ public class ClientHandler {
                 sendMessage("Server: couldn't find such user");
             }
         } else {
-            sendMessage("Server: you doesn't have rights for this command");
+            sendMessage("Server: you don't have rights for this command");
+        }
+    }
+
+    private void executeChangeUsernameCommand(String message) {
+        String[] splitMessage = message.trim().split(" ", 4);
+        if (splitMessage.length != 3 || splitMessage[1].isEmpty() || splitMessage[2].isEmpty()) {
+            sendMessage("Server: incorrect '/changenick' command format");
+            return;
+        }
+
+        String oldUsername = splitMessage[1];
+        String newUsername = splitMessage[2];
+        if (userRole == UserRole.ADMIN) {
+            if (server.changeUsername(oldUsername, newUsername)) {
+                sendMessage("Server: successful name change");
+            } else {
+                sendMessage("Server: couldn't find such user");
+            }
+        } else {
+            sendMessage("Server: you don't have rights for this command");
         }
     }
 
@@ -124,9 +171,7 @@ public class ClientHandler {
             sendMessage("Server: incorrect auth command");
             return false;
         }
-        String login = elements[1];
-        String password = elements[2];
-        String usernameFromService = server.getUserService().getUsernameByLoginAndPassword(login, password);
+        String usernameFromService = server.getUserService().getUsernameByLoginAndPassword(elements[1], elements[2]);
         if (usernameFromService == null) {
             sendMessage("Server: user doesn't exist with such login and password");
             return false;
@@ -135,9 +180,9 @@ public class ClientHandler {
             sendMessage("Server: user is already logged in");
             return false;
         }
-        username = usernameFromService;
-        userRole = server.getUserService().getUserRole(username);
-        sendMessage("/authok " + username);
+        this.username = usernameFromService;
+        this.login = server.getUserService().getUserLogin(username);
+        this.userRole = server.getUserService().getUserRole(username);
         sendMessage(String.format("Server: welcome to the chat, %s!", username));
         server.subscribe(this);
         return true;
@@ -154,7 +199,7 @@ public class ClientHandler {
         String usernameFromRegister = elements[3];
         if (server.getUserService().registerUser(login, password, usernameFromRegister)) {
             this.username = usernameFromRegister;
-            sendMessage("/authok " + username);
+            this.login = login;
             sendMessage("Server: registration was successful");
             server.subscribe(this);
             return true;
@@ -165,8 +210,12 @@ public class ClientHandler {
     }
 
     public void sendMessage(String message) {
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String formattedDateTime = now.format(formatter);
+
         try {
-            out.writeUTF(message);
+            out.writeUTF("[" + formattedDateTime + "] " + message);
         } catch (IOException e) {
             logger.error(e);
         }
