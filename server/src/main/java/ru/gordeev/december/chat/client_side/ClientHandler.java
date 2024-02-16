@@ -1,4 +1,8 @@
-package ru.gordeev.december.chat;
+package ru.gordeev.december.chat.client_side;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import ru.gordeev.december.chat.Server;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -6,6 +10,8 @@ import java.io.IOException;
 import java.net.Socket;
 
 public class ClientHandler {
+
+    private Logger logger;
     private Server server;
     private Socket socket;
     private DataInputStream in;
@@ -22,6 +28,7 @@ public class ClientHandler {
     }
 
     public ClientHandler(Server server, Socket socket) throws IOException {
+        this.logger = LogManager.getLogger(ClientHandler.class);
         this.server = server;
         this.socket = socket;
         this.in = new DataInputStream(socket.getInputStream());
@@ -29,11 +36,11 @@ public class ClientHandler {
 
         new Thread(() -> {
             try {
-                sendMessage("Server: please login or register");
+                sendMessage("Server: please login (/auth {login} {password}) or register (/register {login} {password} {nickname})");
                 authentication();
                 processClientsChatMessages();
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                logger.error(e);
             } finally {
                 disconnect();
             }
@@ -48,38 +55,44 @@ public class ClientHandler {
                     break;
                 }
                 if (message.contains("/w")) {
-                    String[] splitMessage = message.split(" ", 3);
-                    if (splitMessage.length != 3) {
-                        sendMessage("Server: incorrect wisp command");
-                        continue;
-                    }
-                    server.sendPrivateMessage(this, splitMessage[1], splitMessage[2]);
+                    sendPrivateMessage(message);
                     continue;
                 }
                 if (message.startsWith("/kick")) {
-                    String[] splitMessage = message.split(" ", 2);
-                    String userToBeKicked = splitMessage[1];
-                    if (splitMessage.length != 2 || username.equals(userToBeKicked)) {
-                        sendMessage("Server: incorrect kick command");
-                        continue;
-                    }
-
-                    if (userRole == UserRole.ADMIN) {
-                        if (server.kickUser(userToBeKicked)) {
-                            server.broadcastMessage(String.format("%s kicked %s", username, userToBeKicked));
-                            continue;
-                        } else {
-                            sendMessage("Server: couldn't find such user");
-                            continue;
-                        }
-                    } else {
-                        sendMessage("Server: you doesn't have rights for this command");
-                        continue;
-                    }
+                    executeKickCommand(message);
+                    continue;
                 }
             }
             server.broadcastMessage(username + ": " + message);
         }
+    }
+
+    private void executeKickCommand(String message) {
+        String[] splitMessage = message.split(" ", 2);
+        String userToBeKicked = splitMessage[1];
+        if (splitMessage.length != 2 || username.equals(userToBeKicked)) {
+            sendMessage("Server: incorrect kick command");
+            return;
+        }
+
+        if (userRole == UserRole.ADMIN) {
+            if (server.kickUser(userToBeKicked)) {
+                server.broadcastMessage(String.format("%s kicked %s", username, userToBeKicked));
+            } else {
+                sendMessage("Server: couldn't find such user");
+            }
+        } else {
+            sendMessage("Server: you doesn't have rights for this command");
+        }
+    }
+
+    private void sendPrivateMessage(String message) {
+        String[] splitMessage = message.split(" ", 3);
+        if (splitMessage.length != 3) {
+            sendMessage("Server: incorrect wisp command");
+            return;
+        }
+        server.sendPrivateMessage(this, splitMessage[1], splitMessage[2]);
     }
 
     private void authentication() throws IOException {
@@ -92,7 +105,7 @@ public class ClientHandler {
             } else if (message.startsWith("/register")) {
                 isSucceed = tryToRegister(message);
             } else {
-                sendMessage("Server: please login or register");
+                sendMessage("Server: please login (/auth {login} {password}) or register (/register {login} {password} {nickname})");
             }
 
             if (isSucceed) {
@@ -151,7 +164,7 @@ public class ClientHandler {
         try {
             out.writeUTF(message);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            logger.error(e);
         }
     }
 
@@ -162,7 +175,7 @@ public class ClientHandler {
                 in.close();
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            logger.error(e);
         }
 
         try {
@@ -170,7 +183,7 @@ public class ClientHandler {
                 out.close();
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            logger.error(e);
         }
 
         try {
@@ -178,7 +191,7 @@ public class ClientHandler {
                 socket.close();
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            logger.error(e);
         }
     }
 }

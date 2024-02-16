@@ -1,5 +1,11 @@
 package ru.gordeev.december.chat;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import ru.gordeev.december.chat.client_side.ClientHandler;
+import ru.gordeev.december.chat.client_side.UserService;
+import ru.gordeev.december.chat.database.PostgresUserService;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -8,6 +14,7 @@ import java.util.List;
 
 public class Server {
 
+    private final Logger logger;
     private int port;
     private List<ClientHandler> clientHandlerList;
     private UserService userService;
@@ -17,6 +24,7 @@ public class Server {
     }
 
     public Server(int port) {
+        this.logger = LogManager.getLogger(Server.class);
         this.port = port;
         this.clientHandlerList = new ArrayList<>();
         this.userService = new PostgresUserService();
@@ -24,17 +32,17 @@ public class Server {
 
     public void start() {
         try (ServerSocket socket = new ServerSocket(port)) {
-            System.out.printf("Server has been started at port %d%n", port);
+            logger.info("Server has been started at port {}", port);
             while (true) {
                 Socket clientSocket = socket.accept();
                 try {
                     new ClientHandler(this, clientSocket);
                 } catch (IOException e) {
-                    System.out.println("Failed to connect user");
+                    logger.info("Failed to connect user");
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error(e);
         }
     }
 

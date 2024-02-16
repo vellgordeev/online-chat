@@ -1,6 +1,7 @@
 package ru.gordeev.december.chat.callback;
 
-import ru.gordeev.december.chat.callback.Callback;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -8,10 +9,16 @@ import java.io.IOException;
 import java.net.Socket;
 
 public class Network implements AutoCloseable {
+
+    private Logger logger;
     private Socket socket;
     private DataOutputStream out;
     private DataInputStream in;
     private Callback onMessageReceived;
+
+    public Network() {
+        this.logger = LogManager.getLogger(Network.class);
+    }
 
     public void setOnMessageReceived(Callback onMessageReceived) {
         this.onMessageReceived = onMessageReceived;
@@ -30,18 +37,17 @@ public class Network implements AutoCloseable {
                         System.out.println(messageFromServer);
                     }
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    logger.error(e);
                 }
             }).start();
             while (true) {
                 String message = in.readUTF();
-
                 if (onMessageReceived != null) {
                     onMessageReceived.callback(message);
                 }
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            logger.error(e);
         } finally {
             close();
         }
@@ -58,7 +64,7 @@ public class Network implements AutoCloseable {
                 in.close();
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            logger.error(e);
         }
 
         try {
@@ -66,7 +72,7 @@ public class Network implements AutoCloseable {
                 out.close();
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            logger.error(e);
         }
 
         try {
@@ -74,7 +80,7 @@ public class Network implements AutoCloseable {
                 socket.close();
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            logger.error(e);
         }
     }
 

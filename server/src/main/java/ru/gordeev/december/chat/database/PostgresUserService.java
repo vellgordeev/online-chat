@@ -1,6 +1,14 @@
-package ru.gordeev.december.chat;
+package ru.gordeev.december.chat.database;
 
-import java.sql.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import ru.gordeev.december.chat.client_side.UserRole;
+import ru.gordeev.december.chat.client_side.UserService;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Objects;
 
 public class PostgresUserService implements UserService {
@@ -16,28 +24,31 @@ public class PostgresUserService implements UserService {
 
      */
 
+    private final Logger logger;
     private static final String SELECT_USER_BY_LOGIN_AND_PASSWORD = "SELECT username FROM users WHERE login = ? AND password = crypt(?, password)";
     private static final String SELECT_USER_BY_LOGIN_OR_USERNAME = "SELECT id FROM users WHERE login = ? OR username = ?";
     private static final String INSERT_USER_BY_LOGIN_PASSWORD_USERNAME = "INSERT INTO users (login, password, username, role) " +
             "VALUES (?, crypt(?, gen_salt('bf')), ?, 'user')";
-    private static final String SELECT_ROLE_BY_USERNAME= "SELECT role FROM users WHERE username = ?";
+    private static final String SELECT_ROLE_BY_USERNAME = "SELECT role FROM users WHERE username = ?";
 
+    public PostgresUserService() {
+        this.logger = LogManager.getLogger(PostgresUserService.class.getName());
+    }
 
     private Connection getConnection() {
-        Connection connection = null;
         try {
-            connection = DriverManager.getConnection("jdbc:postgresql://localhost/postgres", "postgres", null);
+            return DataBaseConnection.getDataSource().getConnection();
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Failed to get database connection", e);
+            throw new RuntimeException(e);
         }
-        return Objects.requireNonNull(connection);
     }
 
     @Override
     public String getUsernameByLoginAndPassword(String login, String password) {
-        Connection connection = getConnection();
         String username = null;
-        try (PreparedStatement statement = connection.prepareStatement(SELECT_USER_BY_LOGIN_AND_PASSWORD)) {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_USER_BY_LOGIN_AND_PASSWORD)) {
             statement.setString(1, login);
             statement.setString(2, password);
             ResultSet resultSet = statement.executeQuery();
@@ -46,15 +57,7 @@ public class PostgresUserService implements UserService {
                 username = resultSet.getString(1);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                if (!connection.isClosed()) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
+            logger.error(e);
         }
         return username;
     }
@@ -70,14 +73,14 @@ public class PostgresUserService implements UserService {
 
             isUserRegisted = resultSet.next();
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error(e);
         } finally {
             try {
                 if (!connection.isClosed()) {
                     connection.close();
                 }
             } catch (SQLException e) {
-                e.printStackTrace();
+                logger.error(e);
             }
         }
         return isUserRegisted;
@@ -99,14 +102,14 @@ public class PostgresUserService implements UserService {
                 isSuccess = true;
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error(e);
         } finally {
             try {
                 if (!connection.isClosed()) {
                     connection.close();
                 }
             } catch (SQLException e) {
-                e.printStackTrace();
+                logger.error(e);
             }
         }
         return isSuccess;
@@ -131,14 +134,14 @@ public class PostgresUserService implements UserService {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error(e);
         } finally {
             try {
                 if (!connection.isClosed()) {
                     connection.close();
                 }
             } catch (SQLException e) {
-                e.printStackTrace();
+                logger.error(e);
             }
         }
         return Objects.requireNonNull(userRole);
