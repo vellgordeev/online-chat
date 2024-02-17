@@ -1,4 +1,4 @@
-package ru.gordeev.december.chat.callback;
+package ru.gordeev.chat.callback;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -10,6 +10,7 @@ import java.net.Socket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+@Deprecated
 public class Network implements AutoCloseable {
 
     private Logger logger;

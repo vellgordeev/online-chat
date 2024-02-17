@@ -1,4 +1,4 @@
-package ru.gordeev.december.chat;
+package ru.gordeev.chat;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -8,18 +8,14 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Scanner;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class Client {
 
     private final Logger logger;
-    private final ExecutorService threadPool;
     private boolean isOnline;
 
     public Client() {
         this.logger = LogManager.getLogger(Client.class);
-        this.threadPool = Executors.newCachedThreadPool();
     }
 
     public void start() {
@@ -31,14 +27,13 @@ public class Client {
             logger.info("Successful connection to server");
             isOnline = true;
             Scanner scanner = new Scanner(System.in);
-            threadPool.execute(() -> {
+            new Thread(() -> {
                 try {
-                    readMessagesFromServerAndPrintThem(in);
-                    listenToBreakCommandsAndDoThem(in);
+                    readMessagesFromServer(in);
                 } catch (IOException e) {
-                    logger.warn("You have been disconnected from the server");
+                    logger.warn(e);
                 }
-            });
+            }).start();
             listenToUserInputAndSendItToServer(scanner, out);
         } catch (IOException e) {
             logger.warn("You have been disconnected from the server");
@@ -55,21 +50,19 @@ public class Client {
         }
     }
 
-    private void listenToBreakCommandsAndDoThem(DataInputStream in) throws IOException {
-        while (true) {
+    private void readMessagesFromServer(DataInputStream in) throws IOException {
+        while (isOnline) {
             String message = in.readUTF();
-            if (message.startsWith("/kicked")) {
+            if (message.contains("/kicked")) {
                 isOnline = false;
                 logger.warn("You have been kicked from the server");
                 break;
             }
-            System.out.println(message);
-        }
-    }
-
-    private void readMessagesFromServerAndPrintThem(DataInputStream in) throws IOException {
-        while (true) {
-            String message = in.readUTF();
+            if (message.contains("/inactive")) {
+                isOnline = false;
+                logger.warn("You have been disconnected from the server due to inactivity");
+                break;
+            }
             System.out.println(message);
         }
     }

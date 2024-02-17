@@ -1,10 +1,10 @@
-package ru.gordeev.december.chat;
+package ru.gordeev.chat;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import ru.gordeev.december.chat.client_side.ClientHandler;
-import ru.gordeev.december.chat.client_side.UserService;
-import ru.gordeev.december.chat.database.PostgresUserService;
+import ru.gordeev.chat.client_handlers.ClientHandler;
+import ru.gordeev.chat.client_handlers.UserService;
+import ru.gordeev.chat.database.PostgresUserService;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -65,7 +65,7 @@ public class Server {
     public synchronized void sendPrivateMessage(ClientHandler clientHandler, String receiverUsername, String message) {
         for (ClientHandler ch : clientHandlerList)
             if (ch.getUsername().equals(receiverUsername)) {
-                ch.sendMessage("private message from " + clientHandler.getUsername() + ": " + message);
+                ch.sendMessage(String.format("private message from %s: %s", clientHandler.getUsername(), message));
             }
     }
 
@@ -73,6 +73,17 @@ public class Server {
         for (ClientHandler client : clientHandlerList) {
             if (client.getUsername().equals(username)) {
                 client.sendMessage("/kicked");
+                unsubscribe(client);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public synchronized boolean disconnectUserDueToInactivity(String username) {
+        for (ClientHandler client : clientHandlerList) {
+            if (client.getUsername().equals(username)) {
+                client.sendMessage("/inactive");
                 unsubscribe(client);
                 return true;
             }

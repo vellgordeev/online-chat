@@ -1,4 +1,4 @@
-package ru.gordeev.december.chat.client_side;
+package ru.gordeev.chat.client_handlers;
 
 public interface UserService {
 

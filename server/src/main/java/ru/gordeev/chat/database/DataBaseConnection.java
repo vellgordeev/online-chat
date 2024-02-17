@@ -1,4 +1,4 @@
-package ru.gordeev.december.chat.database;
+package ru.gordeev.chat.database;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;

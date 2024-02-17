@@ -1,5 +1,6 @@
-package ru.gordeev.december.chat.callback;
+package ru.gordeev.chat.callback;
 
+@Deprecated
 public interface Callback {
     void callback(Object... args);
 }

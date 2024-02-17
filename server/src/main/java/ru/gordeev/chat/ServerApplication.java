@@ -1,4 +1,4 @@
-package ru.gordeev.december.chat;
+package ru.gordeev.chat;
 
 public class ServerApplication {
 

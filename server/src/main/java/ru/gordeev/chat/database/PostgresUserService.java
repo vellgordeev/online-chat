@@ -1,9 +1,9 @@
-package ru.gordeev.december.chat.database;
+package ru.gordeev.chat.database;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import ru.gordeev.december.chat.client_side.UserRole;
-import ru.gordeev.december.chat.client_side.UserService;
+import ru.gordeev.chat.client_handlers.UserService;
+import ru.gordeev.chat.client_handlers.UserRole;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
