@@ -65,7 +65,7 @@ public class PostgresUserService implements UserService {
                 username = resultSet.getString(1);
             }
         } catch (SQLException e) {
-            logger.error(e);
+            logger.error("Postgres error while getting username by login and password", e);
         }
         return username;
     }
@@ -81,7 +81,7 @@ public class PostgresUserService implements UserService {
 
             isUserRegister = resultSet.next();
         } catch (SQLException e) {
-            logger.error(e);
+            logger.error(String.format("Postgres error while checking registration for user %s", username), e);
         }
         return isUserRegister;
     }
@@ -98,7 +98,7 @@ public class PostgresUserService implements UserService {
             statement.setString(3, username);
             return statement.executeUpdate() > 0;
         } catch (SQLException e) {
-            logger.error(e);
+            logger.error("Postgres error while register user", e);
         }
         return false;
     }
