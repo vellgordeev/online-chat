@@ -15,7 +15,7 @@ public class BanManagementService {
 
     private Logger logger;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private final String UPDATE_USERS = "UPDATE users SET is_banned = FALSE, ban_expiration = NULL WHERE ban_expiration <= NOW() AND is_banned = TRUE";
+    private static final String UPDATE_USERS = "UPDATE users SET is_banned = FALSE, ban_expiration = NULL WHERE ban_expiration <= NOW() AND is_banned = TRUE";
 
     public BanManagementService() {
         this.logger = LogManager.getLogger(BanManagementService.class);
