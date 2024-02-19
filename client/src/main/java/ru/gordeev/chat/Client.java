@@ -8,14 +8,18 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Client {
 
     private final Logger logger;
+    private ExecutorService executorService;
     private boolean isOnline;
 
     public Client() {
         this.logger = LogManager.getLogger(Client.class);
+        this.executorService = Executors.newSingleThreadExecutor();
     }
 
     public void start() {
@@ -27,13 +31,13 @@ public class Client {
             logger.info("Successful connection to server");
             isOnline = true;
             Scanner scanner = new Scanner(System.in);
-            new Thread(() -> {
+            executorService.execute(() -> {
                 try {
                     readMessagesFromServer(in);
                 } catch (IOException e) {
                     logger.warn(e);
                 }
-            }).start();
+            });
             listenToUserInputAndSendItToServer(scanner, out);
         } catch (IOException e) {
             logger.warn("You have been disconnected from the server");
@@ -41,26 +45,37 @@ public class Client {
     }
 
     private void listenToUserInputAndSendItToServer(Scanner scanner, DataOutputStream out) throws IOException {
-        while (isOnline) {
+        while (true) {
             String message = scanner.nextLine();
-            out.writeUTF(message);
-            if (message.equals("/exit")) {
+            if (message.equals("/exit") || !isOnline) {
+                executorService.shutdown();
                 break;
             }
+            out.writeUTF(message);
         }
     }
 
     private void readMessagesFromServer(DataInputStream in) throws IOException {
-        while (isOnline) {
+        while (true) {
             String message = in.readUTF();
             if (message.contains("/kicked")) {
                 isOnline = false;
-                logger.warn("You have been kicked from the server");
                 break;
             }
             if (message.contains("/inactive")) {
                 isOnline = false;
-                logger.warn("You have been disconnected from the server due to inactivity");
+                break;
+            }
+            if (message.contains("/banned")) {
+                isOnline = false;
+                break;
+            }
+            if (message.contains("/tempBanned ")) {
+                isOnline = false;
+                break;
+            }
+            if (message.contains("/shutdown")) {
+                isOnline = false;
                 break;
             }
             System.out.println(message);

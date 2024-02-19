@@ -3,6 +3,7 @@ package ru.gordeev.chat.client_handlers;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import ru.gordeev.chat.Server;
+import ru.gordeev.chat.helpers.UserNotFoundException;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -10,15 +11,20 @@ import java.io.IOException;
 import java.net.Socket;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import static ru.gordeev.chat.helpers.ServerMessages.*;
 
 public class ClientHandler {
 
-    private Logger logger;
+    private final Logger logger;
+    private final ExecutorService executor;
+    private final Server server;
+    private final Socket socket;
+    private final DataInputStream in;
+    private final DataOutputStream out;
     private UserActivityWatcher userActivityWatcher;
-    private Server server;
-    private Socket socket;
-    private DataInputStream in;
-    private DataOutputStream out;
     private String login;
     private String username;
     private UserRole userRole;
@@ -35,10 +41,6 @@ public class ClientHandler {
         this.username = newUserName;
     }
 
-    public UserRole getUserRole() {
-        return userRole;
-    }
-
     public String getLogin() {
         return login;
     }
@@ -49,23 +51,25 @@ public class ClientHandler {
         this.socket = socket;
         this.in = new DataInputStream(socket.getInputStream());
         this.out = new DataOutputStream(socket.getOutputStream());
+        this.executor = Executors.newSingleThreadExecutor();
 
-        new Thread(() -> {
+        executor.execute(() -> {
             try {
-                sendMessage("Server: please login (/auth {login} {password}) or register (/register {login} {password} {nickname})");
+                sendMessage("Server: please login or register");
                 authentication();
                 processClientsChatMessages();
             } catch (IOException e) {
-                logger.error(e);
+                logger.error("Error while creating client handler", e);
             } finally {
                 disconnect();
             }
-        }).start();
+        });
     }
 
     public void executeInactiveCommand() {
         if (server.disconnectUserDueToInactivity(username)) {
             server.broadcastMessage(String.format("Server: the user %s was disconnected due to inactivity", username));
+            disconnect();
         }
     }
 
@@ -95,15 +99,45 @@ public class ClientHandler {
                     server.printActiveUsersList(username);
                     continue;
                 }
+                if (message.startsWith("/ban")) {
+                    executeBanCommand(message);
+                    continue;
+                }
+                if (message.startsWith("/unban")) {
+                    executeUnbanCommand(message);
+                    continue;
+                }
+                if (message.startsWith("/shutdown")) {
+                    executeShutdownCommand(message);
+                    break;
+                }
+                if (message.startsWith("/help") && message.equals("/help")) {
+                    server.printServerCommandsListList(username);
+                    continue;
+                }
             }
             server.broadcastMessage(username + ": " + message);
+        }
+    }
+
+    private void executeShutdownCommand(String message) {
+        if (!"/shutdown".equals(message.trim())) {
+            sendMessage(getIncorrectCommandFormatMessage("/shutdown"));
+            return;
+        }
+
+        if (userRole == UserRole.ADMIN) {
+            server.broadcastMessage("Server: is shutting down...");
+            server.shutdown();
+        } else {
+            sendMessage(YOU_DONT_HAVE_RIGHTS);
         }
     }
 
     private void executeKickCommand(String message) {
         String[] splitMessage = message.trim().split(" ", 2);
         if (splitMessage.length != 2 || splitMessage[1].isEmpty()) {
-            sendMessage("Server: Incorrect '/kick' command format");
+            sendMessage(getIncorrectCommandFormatMessage("/kick"));
             return;
         }
         String userToBeKicked = splitMessage[1];
@@ -116,17 +150,72 @@ public class ClientHandler {
             if (server.kickUser(userToBeKicked)) {
                 server.broadcastMessage(String.format("%s kicked %s", username, userToBeKicked));
             } else {
-                sendMessage("Server: couldn't find such user");
+                sendMessage(COULD_NOT_FIND_USER);
             }
         } else {
-            sendMessage("Server: you don't have rights for this command");
+            sendMessage(YOU_DONT_HAVE_RIGHTS);
+        }
+    }
+
+    private void executeBanCommand(String message) {
+        String[] splitMessage = message.trim().split(" ", 3);
+        if (splitMessage.length < 2 || splitMessage[1].isEmpty()) {
+            sendMessage(getIncorrectCommandFormatMessage("/ban"));
+            return;
+        }
+
+        String username = splitMessage[1];
+        Integer banDuration = null;
+
+        if (splitMessage.length == 3 && !splitMessage[2].isEmpty()) {
+            try {
+                banDuration = Integer.parseInt(splitMessage[2]);
+            } catch (NumberFormatException e) {
+                sendMessage("Server: incorrect ban duration. Please specify the number of minutes");
+                return;
+            }
+        }
+
+        if (userRole == UserRole.ADMIN) {
+            boolean banResult;
+            if (banDuration == null) {
+                banResult = server.banUser(username);
+            } else {
+                banResult = server.banUser(username, banDuration);
+            }
+            if (banResult) {
+                sendMessage("Server: user " + username + " has been banned" + (banDuration != null ? " for " + banDuration + " minutes" : " permanently"));
+            } else {
+                sendMessage(COULD_NOT_FIND_USER);
+            }
+        } else {
+            sendMessage(YOU_DONT_HAVE_RIGHTS);
+        }
+    }
+
+    private void executeUnbanCommand(String message) {
+        String[] splitMessage = message.trim().split(" ", 2);
+        if (splitMessage.length != 2 || splitMessage[1].isEmpty()) {
+            sendMessage(getIncorrectCommandFormatMessage("/unban"));
+            return;
+        }
+
+        String usernameToUnban = splitMessage[1];
+        if (userRole == UserRole.ADMIN) {
+            if (server.unbanUser(usernameToUnban)) {
+                sendMessage("Server: user " + usernameToUnban + " has been unbanned successfully");
+            } else {
+                sendMessage(COULD_NOT_FIND_USER);
+            }
+        } else {
+            sendMessage(YOU_DONT_HAVE_RIGHTS);
         }
     }
 
     private void executeChangeUsernameCommand(String message) {
         String[] splitMessage = message.trim().split(" ", 4);
         if (splitMessage.length != 3 || splitMessage[1].isEmpty() || splitMessage[2].isEmpty()) {
-            sendMessage("Server: incorrect '/changenick' command format");
+            sendMessage(getIncorrectCommandFormatMessage("/changenick"));
             return;
         }
 
@@ -136,17 +225,17 @@ public class ClientHandler {
             if (server.changeUsername(oldUsername, newUsername)) {
                 sendMessage("Server: successful name change");
             } else {
-                sendMessage("Server: couldn't find such user");
+                sendMessage(COULD_NOT_FIND_USER);
             }
         } else {
-            sendMessage("Server: you don't have rights for this command");
+            sendMessage(YOU_DONT_HAVE_RIGHTS);
         }
     }
 
     private void sendPrivateMessage(String message) {
         String[] splitMessage = message.split(" ", 3);
         if (splitMessage.length != 3) {
-            sendMessage("Server: incorrect wisp command");
+            sendMessage(getIncorrectCommandFormatMessage("/w"));
             return;
         }
         server.sendPrivateMessage(this, splitMessage[1], splitMessage[2]);
@@ -162,7 +251,7 @@ public class ClientHandler {
             } else if (message.startsWith("/register")) {
                 isSucceed = tryToRegister(message);
             } else {
-                sendMessage("Server: please login (/auth {login} {password}) or register (/register {login} {password} {nickname})");
+                sendMessage("Server: please login or register");
             }
 
             if (isSucceed) {
@@ -177,7 +266,7 @@ public class ClientHandler {
     private boolean tryToAuthenticate(String message) {
         String[] elements = message.split(" ");
         if (elements.length != 3) {
-            sendMessage("Server: incorrect auth command");
+            sendMessage(getIncorrectCommandFormatMessage("/auth"));
             return false;
         }
         String usernameFromService = server.getUserService().getUsernameByLoginAndPassword(elements[1], elements[2]);
@@ -189,10 +278,21 @@ public class ClientHandler {
             sendMessage("Server: user is already logged in");
             return false;
         }
+        try {
+            if (server.isBanned(usernameFromService)) {
+                sendMessage("Server: user is currently banned");
+                return false;
+            }
+        } catch (UserNotFoundException e) {
+            logger.error("Error when searching for a user by the ban service", e);
+            sendMessage("Server: it's impossible to identify the user's status");
+            return false;
+        }
         this.username = usernameFromService;
         this.login = server.getUserService().getUserLogin(username);
         this.userRole = server.getUserService().getUserRole(username);
         sendMessage(String.format("Server: welcome to the chat, %s!", username));
+        sendMessage("Server: you can find out the list of server commands by calling '/help'");
         server.subscribe(this);
         return true;
     }
@@ -200,7 +300,7 @@ public class ClientHandler {
     private boolean tryToRegister(String message) {
         String[] elements = message.split(" ");
         if (elements.length != 4) {
-            sendMessage("Server: incorrect register command");
+            sendMessage(getIncorrectCommandFormatMessage("/register"));
             return false;
         }
         String login = elements[1];
@@ -226,11 +326,11 @@ public class ClientHandler {
         try {
             out.writeUTF("[" + formattedDateTime + "] " + message);
         } catch (IOException e) {
-            logger.error(e);
+            logger.error("Error while sending message", e);
         }
     }
 
-    private void disconnect() {
+    public void disconnect() {
         server.unsubscribe(this);
         try {
             if (in != null) {
@@ -255,5 +355,6 @@ public class ClientHandler {
         } catch (IOException e) {
             logger.error(e);
         }
+        executor.shutdown();
     }
 }
