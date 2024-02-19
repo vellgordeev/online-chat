@@ -1,8 +1,9 @@
-package ru.gordeev.december.chat.callback;
+package ru.gordeev.chat.callback;
 
 import java.io.IOException;
 import java.util.Scanner;
 
+@Deprecated
 public class ClientApplicationWithCallbacks {
 
     public static void main(String[] args) {
