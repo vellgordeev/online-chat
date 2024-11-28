@@ -1,4 +1,4 @@
-package ru.gordeev.december.chat;
+package ru.gordeev.chat.client_handlers;
 
 public enum UserRole {
     ADMIN, USER;
