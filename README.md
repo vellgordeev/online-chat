@@ -2,7 +2,7 @@
 
 Welcome to the **Console Chat** project! This repository showcases a multi-user, console-based chat server and its 
 corresponding client application. The project demonstrates various skills including networking, concurrency, 
-PostgreSQL integration, password hashing with pgcrypto, Docker Compose usage for database setup, Flyway migrations to automate schema and more. 
+PostgreSQL integration :elephant:, password hashing with pgcrypto, Docker Compose usage for database setup, Flyway migrations to automate schema and more. :tada:
 Below you will find a comprehensive guide on how to set up, run, and use this chat application. 
 Enjoy your reading! :star2:
 
@@ -24,7 +24,7 @@ Enjoy your reading! :star2:
 
 ## Overview
 
-This application is a console-based chat system built with **Java**. It allows multiple clients to connect to a single server, exchange messages, and use special commands for administrative tasks like banning, kicking, and shutting down the server. :speech_balloon:
+This application is a console-based chat system built with **Java**. It allows multiple clients to connect to a single server, exchange messages, and use special commands for administrative tasks like banning, kicking :warning:, and shutting down the server. :speech_balloon:
 
 **Key highlights**:
 - Written in Java, using sockets (`ServerSocket` / `Socket`) for communication.
@@ -38,7 +38,7 @@ This application is a console-based chat system built with **Java**. It allows m
 
 ## Features
 
-- **Multi-user support**: Multiple clients can connect to the server simultaneously.
+- **Multi-user support**: Multiple clients can connect to the server simultaneously. :busts_in_silhouette:
 - **Command-driven**: Users can issue commands (e.g., `/help`, `/ban`, `/unban`) to perform specific actions.
 - **Inactivity check**: Users inactive for a certain duration (default 20 minutes) are disconnected automatically.
 - **Role-based access**: Ordinary users vs. admin privileges (admins can ban or kick users, shut down the server, etc.).
@@ -226,7 +226,7 @@ Otherwise, user authentication with hashed passwords will fail.
 - PostgreSQL pgcrypto for secure password hashing. :lock:
 - Java concurrency (threads, scheduling) for handling multiple clients and inactivity checks.
 - Log4j for logging.
-- HikariCP for efficient database connection pooling.
+- HikariCP for efficient database connection pooling. :rocket:
 
 :wave: Thank you for checking out this Console Chat project! Feel free to explore, modify, and expand upon it to learn 
 more about Java sockets, concurrency, and secure credential storage. If you have any questions or suggestions, please 
