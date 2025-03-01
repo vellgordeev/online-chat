@@ -3,6 +3,7 @@
 Welcome to the **Console Chat** project! This repository showcases a multi-user, console-based chat server and its 
 corresponding client application. The project demonstrates various skills including networking, concurrency, 
 PostgreSQL integration :elephant:, password hashing with pgcrypto, Docker Compose usage for database setup, Flyway migrations to automate schema and more. :tada:
+
 Below you will find a comprehensive guide on how to set up, run, and use this chat application. 
 Enjoy your reading! :star2:
 
