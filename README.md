@@ -167,7 +167,7 @@ adjust the database schema, simply add or modify the SQL migration files, and Fl
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/console-chat.git
+   git clone https://github.com/vellgordeev/online-chat.git
    cd console-chat
     ```
 2. **Start the DB (Docker Compose)**:
