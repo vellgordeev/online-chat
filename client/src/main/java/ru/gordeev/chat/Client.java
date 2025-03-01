@@ -8,18 +8,19 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Scanner;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
+/**
+ * Represents the chat client that connects to the server,
+ * listens for incoming messages, and sends commands
+ * or chat messages based on user input.
+ */
 public class Client {
 
     private final Logger logger;
-    private ExecutorService executorService;
     private boolean isOnline;
 
     public Client() {
         this.logger = LogManager.getLogger(Client.class);
-        this.executorService = Executors.newSingleThreadExecutor();
     }
 
     public void start() {
@@ -31,24 +32,26 @@ public class Client {
             logger.info("Successful connection to server");
             isOnline = true;
             Scanner scanner = new Scanner(System.in);
-            executorService.execute(() -> {
+            Thread readThread  = new Thread(() -> {
                 try {
                     readMessagesFromServer(in);
                 } catch (IOException e) {
                     logger.warn(e);
                 }
             });
-            listenToUserInputAndSendItToServer(scanner, out);
+            readThread.start();
+            listenToUserInputAndSendItToServer(scanner, out, readThread);
         } catch (IOException e) {
             logger.warn("You have been disconnected from the server");
         }
     }
 
-    private void listenToUserInputAndSendItToServer(Scanner scanner, DataOutputStream out) throws IOException {
+    private void listenToUserInputAndSendItToServer(Scanner scanner, DataOutputStream out, Thread readThread) throws IOException {
         while (true) {
             String message = scanner.nextLine();
             if (message.equals("/exit") || !isOnline) {
-                executorService.shutdown();
+                out.writeUTF("/exit");
+                readThread.interrupt();
                 break;
             }
             out.writeUTF(message);
@@ -56,25 +59,13 @@ public class Client {
     }
 
     private void readMessagesFromServer(DataInputStream in) throws IOException {
-        while (true) {
+        while (!Thread.currentThread().isInterrupted()) {
             String message = in.readUTF();
-            if (message.contains("/kicked")) {
-                isOnline = false;
-                break;
-            }
-            if (message.contains("/inactive")) {
-                isOnline = false;
-                break;
-            }
-            if (message.contains("/banned")) {
-                isOnline = false;
-                break;
-            }
-            if (message.contains("/tempBanned ")) {
-                isOnline = false;
-                break;
-            }
-            if (message.contains("/shutdown")) {
+            if (message.contains("/kicked")
+                    || message.contains("/inactive")
+                    || message.contains("/banned")
+                    || message.contains("/tempBanned")
+                    || message.contains("/shutdown")) {
                 isOnline = false;
                 break;
             }

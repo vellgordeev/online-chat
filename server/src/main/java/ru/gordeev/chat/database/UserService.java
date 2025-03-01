@@ -1,5 +1,6 @@
-package ru.gordeev.chat.client_handlers;
+package ru.gordeev.chat.database;
 
+import ru.gordeev.chat.handlers.UserRole;
 import ru.gordeev.chat.helpers.UserNotFoundException;
 
 public interface UserService {

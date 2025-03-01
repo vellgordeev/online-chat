@@ -1,4 +1,4 @@
-package ru.gordeev.chat.client_handlers;
+package ru.gordeev.chat.handlers;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -7,24 +7,27 @@ import ru.gordeev.chat.helpers.UserNotFoundException;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import static ru.gordeev.chat.helpers.ServerMessages.*;
 
+/**
+ * Manages interaction with a single connected client.
+ * Handles commands, message input, and user authentication.
+ * Uses the associated Server instance for high-level actions.
+ */
 public class ClientHandler {
 
     private final Logger logger;
-    private final ExecutorService executor;
     private final Server server;
     private final Socket socket;
     private final DataInputStream in;
     private final DataOutputStream out;
-    private UserActivityWatcher userActivityWatcher;
+    private volatile long lastActivityTime;
     private String login;
     private String username;
     private UserRole userRole;
@@ -45,40 +48,37 @@ public class ClientHandler {
         return login;
     }
 
+    public long getLastActivityTime() { return lastActivityTime; }
+
     public ClientHandler(Server server, Socket socket) throws IOException {
         this.logger = LogManager.getLogger(ClientHandler.class);
         this.server = server;
         this.socket = socket;
         this.in = new DataInputStream(socket.getInputStream());
         this.out = new DataOutputStream(socket.getOutputStream());
-        this.executor = Executors.newSingleThreadExecutor();
 
-        executor.execute(() -> {
+        Thread clientThread = new Thread(() -> {
             try {
                 sendMessage("Server: please login or register");
                 authentication();
                 processClientsChatMessages();
+            } catch (EOFException e) {
+                logger.info("Client {} disconnected (EOF)", username);
             } catch (IOException e) {
-                logger.error("Error while creating client handler", e);
+                logger.error("Error while reading from client {}", username, e);
             } finally {
                 disconnect();
             }
         });
-    }
 
-    public void executeInactiveCommand() {
-        if (server.disconnectUserDueToInactivity(username)) {
-            server.broadcastMessage(String.format("Server: the user %s was disconnected due to inactivity", username));
-            disconnect();
-        }
+        clientThread.start();
     }
 
     private void processClientsChatMessages() throws IOException {
         while (true) {
             String message = in.readUTF();
-            if (userActivityWatcher != null) {
-                userActivityWatcher.onUserActivity();
-            }
+            lastActivityTime = System.currentTimeMillis();
+
             if (message.startsWith("/")) {
                 if (message.equals("/exit")) {
                     break;
@@ -96,7 +96,7 @@ public class ClientHandler {
                     continue;
                 }
                 if (message.startsWith("/activelist") && message.equals("/activelist")) {
-                    server.printActiveUsersList(username);
+                    server.printActiveUsersList(this);
                     continue;
                 }
                 if (message.startsWith("/ban")) {
@@ -146,14 +146,15 @@ public class ClientHandler {
             return;
         }
 
-        if (userRole == UserRole.ADMIN) {
-            if (server.kickUser(userToBeKicked)) {
-                server.broadcastMessage(String.format("%s kicked %s", username, userToBeKicked));
-            } else {
-                sendMessage(COULD_NOT_FIND_USER);
-            }
-        } else {
+        if (userRole != UserRole.ADMIN) {
             sendMessage(YOU_DONT_HAVE_RIGHTS);
+            return;
+        }
+
+        if (server.kickUser(userToBeKicked)) {
+            server.broadcastMessage(String.format("%s kicked %s", username, userToBeKicked));
+        } else {
+            sendMessage(COULD_NOT_FIND_USER);
         }
     }
 
@@ -176,20 +177,21 @@ public class ClientHandler {
             }
         }
 
-        if (userRole == UserRole.ADMIN) {
-            boolean banResult;
-            if (banDuration == null) {
-                banResult = server.banUser(username);
-            } else {
-                banResult = server.banUser(username, banDuration);
-            }
-            if (banResult) {
-                sendMessage("Server: user " + username + " has been banned" + (banDuration != null ? " for " + banDuration + " minutes" : " permanently"));
-            } else {
-                sendMessage(COULD_NOT_FIND_USER);
-            }
-        } else {
+        if (userRole != UserRole.ADMIN) {
             sendMessage(YOU_DONT_HAVE_RIGHTS);
+            return;
+        }
+
+        boolean banResult;
+        if (banDuration == null) {
+            banResult = server.banUser(username);
+        } else {
+            banResult = server.banUser(username, banDuration);
+        }
+        if (banResult) {
+            sendMessage("Server: user " + username + " has been banned" + (banDuration != null ? " for " + banDuration + " minutes" : " permanently"));
+        } else {
+            sendMessage(COULD_NOT_FIND_USER);
         }
     }
 
@@ -201,14 +203,15 @@ public class ClientHandler {
         }
 
         String usernameToUnban = splitMessage[1];
-        if (userRole == UserRole.ADMIN) {
-            if (server.unbanUser(usernameToUnban)) {
-                sendMessage("Server: user " + usernameToUnban + " has been unbanned successfully");
-            } else {
-                sendMessage(COULD_NOT_FIND_USER);
-            }
-        } else {
+        if (userRole != UserRole.ADMIN) {
             sendMessage(YOU_DONT_HAVE_RIGHTS);
+            return;
+        }
+
+        if (server.unbanUser(usernameToUnban)) {
+            sendMessage("Server: user " + usernameToUnban + " has been unbanned successfully");
+        } else {
+            sendMessage(COULD_NOT_FIND_USER);
         }
     }
 
@@ -221,14 +224,15 @@ public class ClientHandler {
 
         String oldUsername = splitMessage[1];
         String newUsername = splitMessage[2];
-        if (userRole == UserRole.ADMIN) {
-            if (server.changeUsername(oldUsername, newUsername)) {
-                sendMessage("Server: successful name change");
-            } else {
-                sendMessage(COULD_NOT_FIND_USER);
-            }
-        } else {
+        if (userRole != UserRole.ADMIN) {
             sendMessage(YOU_DONT_HAVE_RIGHTS);
+            return;
+        }
+
+        if (server.changeUsername(oldUsername, newUsername)) {
+            sendMessage("Server: successful name change");
+        } else {
+            sendMessage(COULD_NOT_FIND_USER);
         }
     }
 
@@ -251,15 +255,12 @@ public class ClientHandler {
             } else if (message.startsWith("/register")) {
                 isSucceed = tryToRegister(message);
             } else {
-                sendMessage("Server: please login or register");
+                sendMessage("Server: please login or register using\n%s".formatted(NEW_USER_HELP));
             }
 
             if (isSucceed) {
                 break;
             }
-        }
-        if (userRole == UserRole.USER) {
-            this.userActivityWatcher = new UserActivityWatcher(this);
         }
     }
 
@@ -291,8 +292,9 @@ public class ClientHandler {
         this.username = usernameFromService;
         this.login = server.getUserService().getUserLogin(username);
         this.userRole = server.getUserService().getUserRole(username);
-        sendMessage(String.format("Server: welcome to the chat, %s!", username));
-        sendMessage("Server: you can find out the list of server commands by calling '/help'");
+        sendMessage(String.format(
+                "\nServer: welcome to the chat, %s!\n" +
+                        "Server: you can find out the list of server commands by calling '/help'", username));
         server.subscribe(this);
         return true;
     }
@@ -355,6 +357,5 @@ public class ClientHandler {
         } catch (IOException e) {
             logger.error(e);
         }
-        executor.shutdown();
     }
 }

@@ -1,6 +1,5 @@
-package ru.gordeev.chat.client_handlers;
+package ru.gordeev.chat.handlers;
 
 public enum UserRole {
     ADMIN, USER;
-
 }

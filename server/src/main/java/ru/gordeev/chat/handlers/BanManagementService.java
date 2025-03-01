@@ -1,4 +1,4 @@
-package ru.gordeev.chat.client_handlers;
+package ru.gordeev.chat.handlers;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,12 +13,13 @@ import java.util.concurrent.TimeUnit;
 
 public class BanManagementService {
 
-    private Logger logger;
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private final Logger logger;
+    private final ScheduledExecutorService scheduler;
     private static final String UPDATE_USERS = "UPDATE users SET is_banned = FALSE, ban_expiration = NULL WHERE ban_expiration <= NOW() AND is_banned = TRUE";
 
     public BanManagementService() {
         this.logger = LogManager.getLogger(BanManagementService.class);
+        scheduler = Executors.newSingleThreadScheduledExecutor();
     }
 
     public void startBanCheck() {
