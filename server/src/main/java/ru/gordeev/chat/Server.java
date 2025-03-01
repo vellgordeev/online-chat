@@ -2,10 +2,11 @@ package ru.gordeev.chat;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import ru.gordeev.chat.client_handlers.BanManagementService;
-import ru.gordeev.chat.client_handlers.ClientHandler;
-import ru.gordeev.chat.client_handlers.UserService;
 import ru.gordeev.chat.database.PostgresUserService;
+import ru.gordeev.chat.database.UserService;
+import ru.gordeev.chat.handlers.BanManagementService;
+import ru.gordeev.chat.handlers.ClientHandler;
+import ru.gordeev.chat.helpers.ServerMessages;
 import ru.gordeev.chat.helpers.UserNotFoundException;
 
 import java.io.IOException;
@@ -13,15 +14,24 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
+/**
+ * The main server class responsible for accepting client connections,
+ * managing connected ClientHandlers, and performing global operations
+ * such as broadcasting messages or banning users. It also periodically
+ * checks for inactive clients.
+ */
 public class Server {
 
     private ServerSocket serverSocket;
     private final Logger logger;
-    private BanManagementService banManagementService;
-    private int port;
-    private List<ClientHandler> clientHandlerList;
-    private UserService userService;
+    private final int port;
+    private final List<ClientHandler> clientHandlerList;
+    private final UserService userService;
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     public UserService getUserService() {
         return userService;
@@ -37,9 +47,11 @@ public class Server {
     public void start() {
         try {
             serverSocket = new ServerSocket(port);
-            this.banManagementService = new BanManagementService();
+            BanManagementService banManagementService = new BanManagementService();
             banManagementService.startBanCheck();
             logger.info("Server has been started at port {}", port);
+
+            scheduler.scheduleAtFixedRate(this::checkInactivity, 1, 1, TimeUnit.MINUTES);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
@@ -75,10 +87,12 @@ public class Server {
         }
     }
 
-    public synchronized void sendPrivateMessage(ClientHandler clientHandler, String receiverUsername, String message) {
-        for (ClientHandler ch : clientHandlerList)
-            if (ch.getUsername().equals(receiverUsername)) {
-                ch.sendMessage(String.format("private message from %s: %s", clientHandler.getUsername(), message));
+    public synchronized void sendPrivateMessage(ClientHandler sender, String receiverUsername, String message) {
+        for (ClientHandler receiver : clientHandlerList)
+            if (receiver.getUsername().equals(receiverUsername)) {
+                sender.sendMessage(String.format("Your private message to %s: %s", receiver.getUsername(), message));
+                receiver.sendMessage(String.format("Private message from %s: %s", sender.getUsername(), message));
+                break;
             }
     }
 
@@ -106,7 +120,7 @@ public class Server {
         return false;
     }
 
-    public synchronized void printActiveUsersList(String username) {
+    public synchronized void printActiveUsersList(ClientHandler user) {
         StringBuilder sb = new StringBuilder();
         sb.append("Users are online now:\n");
 
@@ -114,30 +128,13 @@ public class Server {
             sb.append("- ").append(client.getUsername()).append("\n");
         }
 
-        for (ClientHandler client : clientHandlerList) {
-            if (client.getUsername().equals(username)) {
-                client.sendMessage(sb.toString().trim());
-            }
-        }
+        user.sendMessage(sb.toString().trim());
     }
 
     public synchronized void printServerCommandsListList(String username) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Commands list (put a '/' before the name):\n");
-
-        sb.append("- register {login} {password} {username} – registration\n");
-        sb.append("- auth {login} {password} – authentication\n");
-        sb.append("- w {username} – private message\n");
-        sb.append("- exit – exit (for client)\n");
-        sb.append("- shutdown – stop the server (for admin)\n");
-        sb.append("- ban – ban user\n");
-        sb.append("- ban {time in minutes}– ban user for some time\n");
-        sb.append("- activelist – active clients list\n");
-        sb.append("- changenick – change nickname (for admin)\n");
-
         for (ClientHandler client : clientHandlerList) {
             if (client.getUsername().equals(username)) {
-                client.sendMessage(sb.toString().trim());
+                client.sendMessage(ServerMessages.SERVER_COMMANDS);
             }
         }
     }
@@ -173,7 +170,7 @@ public class Server {
                 return true;
             }
         }
-        return getUserService().setBan(username);
+        return false;
     }
 
     public synchronized boolean banUser(String username, Integer durationMinutes) {
@@ -186,7 +183,7 @@ public class Server {
                 return true;
             }
         }
-        return getUserService().setBan(username, durationMinutes);
+        return false;
     }
 
     public synchronized boolean unbanUser(String username) {
@@ -195,6 +192,33 @@ public class Server {
 
     public synchronized boolean isBanned(String username) throws UserNotFoundException {
         return getUserService().isBanned(username);
+    }
+
+    private void checkInactivity() {
+        long now = System.currentTimeMillis();
+        long inactivityLimit = 20L * 60L * 1000L; // 20 minutes
+
+        List<ClientHandler> toDisconnect = new ArrayList<>();
+        synchronized (clientHandlerList) {
+            for (ClientHandler client : clientHandlerList) {
+                long lastActivity = client.getLastActivityTime();
+                if ((now - lastActivity) > inactivityLimit) {
+                    toDisconnect.add(client);
+                }
+            }
+        }
+
+        for (ClientHandler client : toDisconnect) {
+            logger.info("Disconnecting user {} due to inactivity", client.getUsername());
+            disconnectUserDueToInactivity(client);
+        }
+    }
+
+    private void disconnectUserDueToInactivity(ClientHandler client) {
+        client.sendMessage("Server: you have been disconnected due to inactivity");
+        client.sendMessage("/inactive");
+        unsubscribe(client);
+        client.disconnect();
     }
 
     public synchronized void shutdown() {

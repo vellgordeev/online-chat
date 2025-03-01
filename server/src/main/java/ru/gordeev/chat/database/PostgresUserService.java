@@ -1,215 +1,190 @@
 package ru.gordeev.chat.database;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import ru.gordeev.chat.client_handlers.UserRole;
-import ru.gordeev.chat.client_handlers.UserService;
+import ru.gordeev.chat.database.utils.DaoUtils;
+import ru.gordeev.chat.handlers.UserRole;
 import ru.gordeev.chat.helpers.UserNotFoundException;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.Objects;
 
+/**
+ * An example of a DAO (Data Access Object) implementation for Postgres
+ * that handles user-related queries. It uses DaoUtils methods for
+ * executing JDBC statements and performing queries.
+ */
 public class PostgresUserService implements UserService {
-    /* Таблица выглядит так (role - мой кастомный тип данных enum, бывает 'admin' или 'user'):
 
-        CREATE TABLE users (
-            id              SERIAL PRIMARY KEY,
-            login           VARCHAR(255)       NOT NULL,
-            password        TEXT               NOT NULL,
-            username        VARCHAR(255)       NOT NULL,
-            role            role               NOT NULL,
-            is_banned       BOOLEAN            NOT NULL,
-            ban_expiration  TIMESTAMP,         NOT NULL
-        )
+    private static final String SELECT_USER_BY_LOGIN_AND_PASSWORD =
+            "SELECT username FROM users WHERE login = ? AND password = crypt(?, password)";
+    private static final String SELECT_USER_BY_LOGIN_OR_USERNAME =
+            "SELECT id FROM users WHERE login = ? OR username = ?";
+    private static final String INSERT_USER_BY_LOGIN_PASSWORD_USERNAME =
+            "INSERT INTO users (login, password, username, role) VALUES (?, crypt(?, gen_salt('bf')), ?, 'user')";
+    private static final String SELECT_ROLE_BY_USERNAME =
+            "SELECT role FROM users WHERE username = ?";
+    private static final String SELECT_LOGIN_BY_USERNAME =
+            "SELECT login FROM users WHERE username = ?";
+    private static final String UPDATE_USERNAME =
+            "UPDATE users SET username = ? WHERE login = ?";
+    private static final String BAN_USER_WITHOUT_DATE =
+            "UPDATE users SET is_banned = TRUE, ban_expiration = NULL WHERE username = ?";
+    private static final String UNBAN_USER =
+            "UPDATE users SET is_banned = FALSE, ban_expiration = NULL WHERE username = ?";
+    private static final String SELECT_USER_BAN_STATE_BY_USERNAME =
+            "SELECT is_banned FROM users WHERE username = ?";
 
+
+    /**
+     * Retrieves the Hikari DataSource connection pool.
+     *
+     * @return the DataSource object
      */
-
-    private final Logger logger;
-    private static final String SELECT_USER_BY_LOGIN_AND_PASSWORD = "SELECT username FROM users WHERE login = ? AND password = crypt(?, password)";
-    private static final String SELECT_USER_BY_LOGIN_OR_USERNAME = "SELECT id FROM users WHERE login = ? OR username = ?";
-    private static final String INSERT_USER_BY_LOGIN_PASSWORD_USERNAME = "INSERT INTO users (login, password, username, role) " +
-            "VALUES (?, crypt(?, gen_salt('bf')), ?, 'user')";
-    private static final String SELECT_ROLE_BY_USERNAME = "SELECT role FROM users WHERE username = ?";
-    private static final String SELECT_LOGIN_BY_USERNAME = "SELECT login FROM users WHERE username = ?";
-    private static final String UPDATE_USERNAME = "UPDATE users SET username = ? WHERE login = ?";
-    private static final String BAN_USER_WITHOUT_DATE = "UPDATE users SET is_banned = TRUE, ban_expiration = NULL WHERE username = ?";
-    private static final String UNBAN_USER = "UPDATE users SET is_banned = FALSE, ban_expiration = NULL WHERE username = ?";
-    private static final String SELECT_USER_BAN_STATE_BY_USERNAME = "SELECT is_banned FROM users WHERE username = ?";
-
-    public PostgresUserService() {
-        this.logger = LogManager.getLogger(PostgresUserService.class.getName());
-    }
-
-    private Connection getConnection() {
-        try {
-            return DataBaseConnection.getDataSource().getConnection();
-        } catch (SQLException e) {
-            logger.error("Failed to get database connection", e);
-            throw new RuntimeException(e);
-        }
+    private javax.sql.DataSource getDataSource() {
+        return DataBaseConnection.getDataSource();
     }
 
     @Override
     public synchronized String getUsernameByLoginAndPassword(String login, String password) {
-        String username = null;
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(SELECT_USER_BY_LOGIN_AND_PASSWORD)) {
-            statement.setString(1, login);
-            statement.setString(2, password);
-            ResultSet resultSet = statement.executeQuery();
-
-            if (resultSet.next()) {
-                username = resultSet.getString(1);
-            }
-        } catch (SQLException e) {
-            logger.error("Postgres error while getting username by login and password", e);
-        }
-        return username;
+        return DaoUtils.queryForObject(
+                getDataSource(),
+                SELECT_USER_BY_LOGIN_AND_PASSWORD,
+                st -> {
+                    st.setString(1, login);
+                    st.setString(2, password);
+                },
+                rs -> {
+                    if (rs.next()) {
+                        return rs.getString("username");
+                    }
+                    return null;
+                }
+        );
     }
 
     @Override
     public synchronized boolean isUserAlreadyRegistered(String login, String username) {
-        boolean isUserRegister = false;
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(SELECT_USER_BY_LOGIN_OR_USERNAME)) {
-            statement.setString(1, login);
-            statement.setString(2, username);
-            ResultSet resultSet = statement.executeQuery();
-
-            isUserRegister = resultSet.next();
-        } catch (SQLException e) {
-            logger.error(String.format("Postgres error while checking registration for user %s", username), e);
-        }
-        return isUserRegister;
+        Integer userId = DaoUtils.queryForObject(
+                getDataSource(),
+                SELECT_USER_BY_LOGIN_OR_USERNAME,
+                st -> {
+                    st.setString(1, login);
+                    st.setString(2, username);
+                },
+                rs -> rs.next() ? rs.getInt("id") : null
+        );
+        return userId != null;
     }
 
     @Override
-    public synchronized boolean registerUser(String login, String password, String username) {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(INSERT_USER_BY_LOGIN_PASSWORD_USERNAME)) {
-            if (isUserAlreadyRegistered(login, username)) {
-                return false;
-            }
-            statement.setString(1, login);
-            statement.setString(2, password);
-            statement.setString(3, username);
-            return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.error("Postgres error while register user", e);
+    public synchronized boolean registerUser(String login, String password, String newUsername) {
+        if (isUserAlreadyRegistered(login, newUsername)) {
+            return false;
         }
-        return false;
+        int rows = DaoUtils.executeUpdate(
+                getDataSource(),
+                INSERT_USER_BY_LOGIN_PASSWORD_USERNAME,
+                st -> {
+                    st.setString(1, login);
+                    st.setString(2, password);
+                    st.setString(3, newUsername);
+                }
+        );
+        return rows > 0;
     }
 
     @Override
     public synchronized boolean changeUsername(String login, String newUsername) {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(UPDATE_USERNAME)) {
-            statement.setString(1, newUsername);
-            statement.setString(2, login);
-            return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.error(String.format("Postgres error while changing username for user %s", login), e);
-        }
-        return false;
+        int rows = DaoUtils.executeUpdate(
+                getDataSource(),
+                UPDATE_USERNAME,
+                st -> {
+                    st.setString(1, newUsername);
+                    st.setString(2, login);
+                }
+        );
+        return rows > 0;
     }
 
     @Override
     public synchronized UserRole getUserRole(String username) {
-        UserRole userRole = null;
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(SELECT_ROLE_BY_USERNAME)) {
-            statement.setString(1, username);
-            ResultSet resultSet = statement.executeQuery();
-
-            if (resultSet.next()) {
-                String string = resultSet.getString(1);
-
-                if (string.equals("user")) {
-                    userRole = UserRole.USER;
+        UserRole role = DaoUtils.queryForObject(
+                getDataSource(),
+                SELECT_ROLE_BY_USERNAME,
+                st -> st.setString(1, username),
+                rs -> {
+                    if (rs.next()) {
+                        String r = rs.getString("role");
+                        if ("USER".equalsIgnoreCase(r)) return UserRole.USER;
+                        if ("ADMIN".equalsIgnoreCase(r)) return UserRole.ADMIN;
+                    }
+                    return null;
                 }
-                if (string.equals("admin")) {
-                    userRole = UserRole.ADMIN;
-                }
-            }
-        } catch (SQLException e) {
-            logger.error(String.format("Postgres error while getting role for user %s", username), e);
-        }
-        return Objects.requireNonNull(userRole);
+        );
+        return Objects.requireNonNull(role);
     }
 
     @Override
     public synchronized String getUserLogin(String username) {
-        String login = null;
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(SELECT_LOGIN_BY_USERNAME)) {
-            statement.setString(1, username);
-            ResultSet resultSet = statement.executeQuery();
-
-            if (resultSet.next()) {
-                login = resultSet.getString(1);
-            }
-        } catch (SQLException e) {
-            logger.error(String.format("Postgres error while getting login for user %s", username), e);
-        }
+        String login = DaoUtils.queryForObject(
+                getDataSource(),
+                SELECT_LOGIN_BY_USERNAME,
+                st -> st.setString(1, username),
+                rs -> {
+                    if (rs.next()) {
+                        return rs.getString("login");
+                    }
+                    return null;
+                }
+        );
         return Objects.requireNonNull(login);
     }
 
     @Override
     public synchronized boolean setBan(String username) {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(BAN_USER_WITHOUT_DATE)) {
-            statement.setString(1, username);
-            return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.error(String.format("Postgres error while setting ban for user %s", username), e);
-            return false;
-        }
+        int rows = DaoUtils.executeUpdate(
+                getDataSource(),
+                BAN_USER_WITHOUT_DATE,
+                st -> st.setString(1, username)
+        );
+        return rows > 0;
     }
 
     @Override
     public synchronized boolean setBan(String username, Integer durationMinutes) {
-        String sqlStatement = "UPDATE users SET is_banned = TRUE, ban_expiration = (NOW() + INTERVAL '" + durationMinutes + " minutes') WHERE username = ?";
-
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sqlStatement)) {
-            statement.setString(1, username);
-            return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.error(String.format("Postgres error while setting ban for user %s", username), e);
-            return false;
-        }
+        String sql = "UPDATE users SET is_banned = TRUE, ban_expiration = (NOW() + INTERVAL '" + durationMinutes + " minutes') WHERE username = ?";
+        int rows = DaoUtils.executeUpdate(
+                getDataSource(),
+                sql,
+                st -> st.setString(1, username)
+        );
+        return rows > 0;
     }
 
     @Override
     public synchronized boolean unsetBan(String username) {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(UNBAN_USER)) {
-            statement.setString(1, username);
-            return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.error(String.format("Postgres error while setting ban for user %s", username), e);
-            return false;
-        }
+        int rows = DaoUtils.executeUpdate(
+                getDataSource(),
+                UNBAN_USER,
+                st -> st.setString(1, username)
+        );
+        return rows > 0;
     }
 
     @Override
     public synchronized boolean isBanned(String username) throws UserNotFoundException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(SELECT_USER_BAN_STATE_BY_USERNAME)) {
-            statement.setString(1, username);
-            ResultSet resultSet = statement.executeQuery();
-
-            if (resultSet.next()) {
-                return resultSet.getBoolean(1);
-            } else {
-                throw new UserNotFoundException("User not found: " + username);
-            }
-        } catch (SQLException e) {
-            logger.error(String.format("Postgres error while checking ban for user %s", username), e);
+        Boolean banned = DaoUtils.queryForObject(
+                getDataSource(),
+                SELECT_USER_BAN_STATE_BY_USERNAME,
+                st -> st.setString(1, username),
+                rs -> {
+                    if (rs.next()) {
+                        return rs.getBoolean("is_banned");
+                    }
+                    return null; // user not found
+                }
+        );
+        if (banned == null) {
+            throw new UserNotFoundException("User not found: " + username);
         }
-        return false;
+        return banned;
     }
 }

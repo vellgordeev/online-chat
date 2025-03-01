@@ -7,19 +7,19 @@ import javax.sql.DataSource;
 
 public class DataBaseConnection {
 
-    private static HikariDataSource dataSource;
+    private static final HikariDataSource dataSource;
 
     private DataBaseConnection() {}
 
     static {
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:postgresql://localhost/postgres");
+        config.setJdbcUrl("jdbc:postgresql://localhost:5432/postgres");
         config.setUsername(System.getenv("database.user"));
         config.setPassword(System.getenv("database.password"));
+
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
-
         dataSource = new HikariDataSource(config);
     }
 
