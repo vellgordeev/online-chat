@@ -2,7 +2,7 @@
 
 Welcome to the **Console Chat** project! This repository showcases a multi-user, console-based chat server and its 
 corresponding client application. The project demonstrates various skills including networking, concurrency, 
-PostgreSQL integration :elephant:, password hashing with pgcrypto, Docker Compose usage for database setup, Flyway migrations to automate schema and more. :tada:
+PostgreSQL integration :elephant:, password hashing with pgcrypto, using Docker Compose for database setup, and employing Flyway migrations to automate schema changes, among other features. :tada:
 
 Below you will find a comprehensive guide on how to set up, run, and use this chat application. 
 Enjoy your reading! :star2:
@@ -229,7 +229,7 @@ Otherwise, user authentication with hashed passwords will fail.
 - Log4j for logging.
 - HikariCP for efficient database connection pooling. :rocket:
 
-:wave: Thank you for checking out this Console Chat project! Feel free to explore, modify, and expand upon it to learn 
+:wave: Thank you for checking out my project! Feel free to explore, modify, and expand upon it to learn 
 more about Java sockets, concurrency, and secure credential storage. If you have any questions or suggestions, please 
 open an issue or reach out.
 
